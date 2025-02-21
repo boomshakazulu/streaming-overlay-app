@@ -11,4 +11,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeSpotifyConnectionListener: (callback) =>
     ipcRenderer.removeListener("spotify-connection-status", callback),
   checkSpotifyConnection: () => ipcRenderer.send("check-spotify-connection"),
+  refreshHomePage: () => ipcRenderer.send("refresh-home-page"),
+  on: (channel, callback) =>
+    ipcRenderer.on(channel, (event, ...args) => callback(...args)), // Allow listening to events
+  removeListener: (channel, callback) =>
+    ipcRenderer.removeListener(channel, callback), // Allow removing listeners
+  onSpotifyTokenUpdated: (callback) => {
+    ipcRenderer.on("spotify-token-updated", (event, newToken) => {
+      callback(newToken); // Call the provided callback with the updated token
+    });
+  },
 });

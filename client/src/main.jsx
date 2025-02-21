@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App.jsx";
@@ -8,6 +7,7 @@ import Home from "./pages/home/index.jsx";
 import Login from "./pages/login/index.jsx";
 import Error from "./pages/Error/index.jsx";
 import SpotifyAuth from "./components/spotifyAuth.jsx/index.jsx";
+import SpotifyOverlay from "./pages/spotifyOverlay/index.jsx";
 
 const router = createBrowserRouter([
   {
@@ -26,6 +26,10 @@ const router = createBrowserRouter([
       {
         path: "/auth",
         element: <SpotifyAuth />,
+      },
+      {
+        path: "/spotify-overlay",
+        element: <SpotifyOverlay />,
       },
     ],
   },

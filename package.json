@@ -5,25 +5,45 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "node server/server.js --ignore client",
-    "develop": "cross-env NODE_ENV=development concurrently \"cd server && npm start\" \"cd client && npm run dev\" \"npm run electron\"",
+    "develop": "cross-env NODE_ENV=development concurrently \"cd client && npm run dev\" \"npm run electron\"",
     "install": "cd server && npm i && cd ../client && npm i",
     "seed": "cd server && npm run seed",
-    "build": "cd client && npm run build",
+    "build-client": "cd client && npm run build && npm run copy-env",
+    "build": "npm run build-client && npm run package-electron",
     "render-build": "npm install && npm run build",
-    "electron": "electron ."
+    "electron": "electron .",
+    "copy-env": "copyfiles .env dist/ && copyfiles server/.env dist/",
+    "package-electron": "electron-builder"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^5.1.0",
+    "copyfiles": "^2.4.1",
     "cross-env": "^7.0.3",
     "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
     "vite": "^6.1.1"
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
     "electron-store": "^10.0.1",
-    "dotenv": "^16.4.7"
+    "express": "^4.21.2",
+    "streaming-overlay-app": "file:"
+  },
+  "build": {
+    "appId": "com.example.streamingoverlayapp",
+    "directories": {
+      "output": "dist",
+      "app": "app"
+    },
+    "files": [
+      "client/dist/**/*",
+      "server/**/*",
+      "electron-main.js",
+      "preload.js"
+    ]
   }
 }

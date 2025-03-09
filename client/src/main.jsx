@@ -5,7 +5,7 @@ import "./index.css";
 
 import Home from "./pages/home/index.jsx";
 import Login from "./pages/login/index.jsx";
-import Error from "./pages/Error/index.jsx";
+import Error from "./pages/error/index.jsx";
 import SpotifyAuth from "./components/spotifyAuth.jsx/index.jsx";
 import SpotifyOverlay from "./pages/spotifyOverlay/index.jsx";
 

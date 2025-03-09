@@ -1,7 +1,5 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-console.log("Preload script loaded successfully");
-
 contextBridge.exposeInMainWorld("electronAPI", {
   storeToken: (token) => ipcRenderer.send("store-token", token),
   getToken: () => ipcRenderer.invoke("get-token"),
@@ -21,4 +19,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(newToken); // Call the provided callback with the updated token
     });
   },
+  clearCache: () => ipcRenderer.send("clear-cache"),
 });

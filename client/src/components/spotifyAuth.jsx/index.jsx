@@ -3,7 +3,6 @@ import { useEffect } from "react";
 function SpotifyAuth() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    console.log("URL Params:", urlParams); // Log to check if tokens are being passed
     const accessToken = urlParams.get("access_token");
     const refreshToken = urlParams.get("refresh_token");
 

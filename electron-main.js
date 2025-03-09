@@ -5,8 +5,11 @@ const net = require("net");
 const axios = require("axios");
 const express = require("express");
 const server = require("./server/server");
+const http = require("http");
 
 const appEx = express();
+let mainWindow;
+let loginWindow;
 
 // Load environment variables
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
@@ -14,30 +17,61 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 
 let Store, store;
-let mainWindow;
 
 // Initialize Electron Store
 (async () => {
   try {
     Store = (await import("electron-store")).default;
     store = new Store();
-    console.log("Store initialized at:", store.path);
   } catch (error) {
     console.error("Error initializing store:", error);
   }
 })();
 
-appEx.get("/api/token", (req, res) => {
-  const token = store.get("spotify_access_token");
-  if (token) {
-    res.json({ token });
-  } else {
-    res.status(404).json({ error: "Token not found" });
+const elecServer = http.createServer((req, res) => {
+  // Route for storing Spotify tokens (called by Express server)
+  if (req.method === "POST" && req.url === "/store-token") {
+    let body = "";
+
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+
+    req.on("end", () => {
+      const { access_token, refresh_token } = JSON.parse(body);
+
+      // Store tokens in electron-store
+      ipcMain.emit("store-token", null, {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+      });
+
+      // Send response to Express server
+      res.statusCode = 200;
+      res.end("Tokens stored");
+    });
+  }
+  // Route to get the stored Spotify access token
+  else if (req.method === "GET" && req.url === "/api/token") {
+    const token = store.get("spotify_access_token");
+    if (token) {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ token }));
+    } else {
+      res.statusCode = 404;
+      res.json({ error: "Token not found" });
+    }
+  }
+  // 404 for all other routes
+  else {
+    res.statusCode = 404;
+    res.end("Not Found");
   }
 });
 
-appEx.listen(5001, () => {
-  console.log("Electron API server listening on port 5001");
+// Start the HTTP server on port 5001
+elecServer.listen(5001, () => {
+  console.log("Electron HTTP server running on http://localhost:5001");
 });
 
 // Function to refresh the Spotify token
@@ -64,11 +98,9 @@ async function refreshSpotifyToken() {
     if (response.status === 200) {
       const { access_token, refresh_token: newRefreshToken } = response.data;
       store.set("spotify_access_token", access_token);
-      console.log("New access token stored.");
 
       if (newRefreshToken) {
         store.set("spotify_refresh_token", newRefreshToken);
-        console.log("New refresh token stored.");
       }
 
       return access_token;
@@ -83,11 +115,22 @@ async function refreshSpotifyToken() {
   return false;
 }
 
-// IPC Handlers
-ipcMain.on("store-token", (event, { accessToken, refreshToken }) => {
-  store.set("spotify_access_token", accessToken);
-  store.set("spotify_refresh_token", refreshToken);
-  console.log("Tokens stored.");
+ipcMain.on("clear-cache", () => {
+  // Clear browser cache
+  session.defaultSession.clearCache().then(() => {
+    console.log("Browser cache cleared");
+  });
+
+  // Clear electron-store data (like Spotify token)
+  store.clear(); // This will remove all keys in the store
+  console.log("Electron store cleared");
+  mainWindow.webContents.send("spotify-connection-status", false);
+});
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
 
 ipcMain.on("check-spotify-connection", async (event) => {
@@ -136,7 +179,6 @@ ipcMain.handle("refresh-token", async () => {
   const refreshToken = store?.get("spotify_refresh_token");
 
   if (!refreshToken) {
-    console.log("No refresh token available.");
     mainWindow?.webContents.send("spotify-connection-status", false);
     return null;
   }
@@ -161,7 +203,6 @@ ipcMain.handle("refresh-token", async () => {
     const newAccessToken = response.data.access_token;
     if (newAccessToken) {
       store.set("spotify_access_token", newAccessToken);
-      console.log("Access token refreshed.");
       mainWindow?.webContents.send("spotify-token-updated", newAccessToken);
       mainWindow?.webContents.send("spotify-connection-status", true);
       return newAccessToken;
@@ -176,11 +217,9 @@ ipcMain.handle("refresh-token", async () => {
 
 // Function to run token refresh every hour
 const runTokenRefresh = async () => {
-  console.log("Running token refresh...");
   const refreshToken = store?.get("spotify_refresh_token");
 
   if (!refreshToken) {
-    console.log("No refresh token available.");
     mainWindow?.webContents.send("spotify-connection-status", false);
     return null;
   }
@@ -205,7 +244,6 @@ const runTokenRefresh = async () => {
     const newAccessToken = response.data.access_token;
     if (newAccessToken) {
       store.set("spotify_access_token", newAccessToken);
-      console.log("Access token refreshed.");
       mainWindow?.webContents.send("spotify-token-updated", newAccessToken);
       mainWindow?.webContents.send("spotify-connection-status", true);
       return newAccessToken;
@@ -219,9 +257,7 @@ const runTokenRefresh = async () => {
 };
 
 // Auto-refresh token every hour
-console.log("Setting up interval");
 setInterval(() => {
-  console.log("Refreshing token...");
   runTokenRefresh();
 }, 60 * 60 * 1000);
 
@@ -248,7 +284,7 @@ const waitForVite = (port = 5173) => {
 
 // Open Spotify Login Window
 ipcMain.on("open-spotify-login", () => {
-  const loginWindow = new BrowserWindow({
+  loginWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -261,6 +297,16 @@ ipcMain.on("open-spotify-login", () => {
   loginWindow.loadURL(
     `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&redirect_uri=http://localhost:5000/callback&response_type=code&scope=user-read-private user-read-email user-read-playback-state`
   );
+  ipcMain.on("store-token", (event, { accessToken, refreshToken }) => {
+    store.set("spotify_access_token", accessToken);
+    store.set("spotify_refresh_token", refreshToken);
+    console.log("token saved for real");
+
+    if (loginWindow) {
+      loginWindow.close(); // Close the login window
+      console.log("Login window closed after storing tokens.");
+    }
+  });
 
   loginWindow.on("closed", () => {
     if (mainWindow) {
@@ -269,8 +315,43 @@ ipcMain.on("open-spotify-login", () => {
   });
 });
 
+let serverFront; // Ensure we have a reference to the server
+
+async function startServer() {
+  return new Promise((resolve, reject) => {
+    const appServer = express();
+
+    appServer.use(express.static(path.join(__dirname, "client/dist/")));
+
+    appServer.get("*", (req, res) => {
+      res.sendFile(path.join(__dirname, "client/dist/", "index.html"));
+    });
+
+    serverFront = http.createServer(appServer);
+
+    serverFront.listen(5173, "0.0.0.0", () => {
+      console.log("React app is being served on http://localhost:5173");
+      resolve();
+    });
+
+    serverFront.on("error", (err) => {
+      console.error("Failed to start Express server:", err);
+      reject(err);
+    });
+  });
+}
+
+app.on("before-quit", () => {
+  if (serverFront) {
+    serverFront.close(() => {
+      console.log("Closing Express server...");
+    });
+  }
+});
+
 // Initialize Electron App
 app.whenReady().then(async () => {
+  await startServer();
   await waitForVite();
 
   mainWindow = new BrowserWindow({
@@ -282,10 +363,11 @@ app.whenReady().then(async () => {
       preload: path.join(__dirname, "preload.js"),
     },
   });
-
   mainWindow.loadURL("http://localhost:5173");
+});
 
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
-  });
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });

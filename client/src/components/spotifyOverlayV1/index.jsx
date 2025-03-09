@@ -11,29 +11,29 @@ const SpotifyOverlayV1 = () => {
   });
   const [songOpacity, setSongOpacity] = useState(0);
   const [accessToken, setAccessToken] = useState(null);
+  const [fetchingToken, setFetchingToken] = useState(true);
 
   const fetchToken = async () => {
     try {
       const response = await fetch("http://localhost:5000/api/token");
       const data = await response.json();
       setAccessToken(data.token);
-      console.log("Token from Electron:", data);
+      setFetchingToken(false);
     } catch (error) {
       console.error("Error fetching token:", error);
     }
   };
 
   useEffect(() => {
-    fetchToken(); // Initial fetch when the component mounts
-  }, []);
+    if (fetchingToken) fetchToken(); // Initial fetch when the component mounts
+  }, [fetchingToken]);
 
   useEffect(() => {
-    if (!accessToken) return; // Wait until the access token is available
-
+    let retryCount = 0; // Track the number of retries
+    const maxRetries = 5; // Set a maximum retry limit
+    const retryDelay = 5000; // Initial delay before retrying in milliseconds
     const fetchCurrentlyPlaying = async () => {
-      let retryCount = 0; // Track the number of retries
-      const maxRetries = 5; // Set a maximum retry limit
-      const retryDelay = 1000; // Initial delay before retrying in milliseconds
+      if (!accessToken) return; // Wait until the access token is available
 
       try {
         const response = await fetch(
@@ -52,13 +52,12 @@ const SpotifyOverlayV1 = () => {
           // Token expired or invalid
           if (retryCount < maxRetries) {
             retryCount++;
-            console.log(`401 error: Retrying (${retryCount}/${maxRetries})...`);
             await new Promise((resolve) => setTimeout(resolve, retryDelay)); // Delay before retry
-            await fetchToken(); // Fetch new token and retry
-            return fetchCurrentlyPlaying(); // Retry with new token
+            setFetchingToken(true);
+            return;
+            // return fetchCurrentlyPlaying(); // Retry with new token
           } else {
             console.error("Max retry attempts reached for 401 error.");
-            // Optionally handle max retries exceeded (e.g., show an error message)
             return;
           }
         }
@@ -86,13 +85,6 @@ const SpotifyOverlayV1 = () => {
 
     return () => clearInterval(interval);
   }, [accessToken, songInfo]); // Add songInfo to the dependency array
-
-  //   const reset = () => {
-  //     setSongOpacity(0);
-  //     setAlbumArtStyle({ left: "-100px", filter: "none" });
-  //     setDiscStyle({ left: "-100px", opacity: 0 });
-  //     setOverlayStyle({ left: "-100px", opacity: 0 });
-  //   };
 
   const startSong = (song) => {
     const imgurl = `url('${song?.album?.images[0]?.url}')`;
@@ -135,16 +127,10 @@ const SpotifyOverlayV1 = () => {
 
   const nextSong = (song) => {
     endSong(); // End the current song's animation
-    // setTimeout(() => {
-    //   reset(); // Reset the state
-    // }, 1000);
-    // Increase timeout to allow animation to complete before starting the next song
     setTimeout(() => {
       startSong(song); // Start the new song's animation after a delay
     }, 2500); // Ensure this is long enough for the "endSong" animations to complete
   };
-
-  console.log(songInfo);
 
   return (
     <div id="spotifyV1-main-container">

@@ -12,7 +12,6 @@ const Home = () => {
 
   useEffect(() => {
     const handleRefresh = () => {
-      console.log("Refreshing the homepage...");
       window.location.reload();
     };
 
@@ -48,7 +47,6 @@ const Home = () => {
   useEffect(() => {
     if (electronReady && window.electronAPI) {
       const handleConnectionStatus = (event, status) => {
-        console.log("Connection status:", status);
         setIsConnected(status); // Update connection status
       };
 
